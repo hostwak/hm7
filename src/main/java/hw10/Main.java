@@ -7,10 +7,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Main {
 
     private static final String PATH_NUMBERS = "numbers.txt";
+    // Кэш для хранения уже вычисленных факториалов
+    private static final ConcurrentHashMap<Integer, Long> factorialCache = new ConcurrentHashMap<>();
 
     /**
      * Генерация файла со случайными числами.
@@ -50,23 +53,70 @@ public class Main {
     }
 
     /**
-     * Вычисление факториалов для заданного количества чисел.
-     * @param countNum количество чисел для подсчета факториала.
+     * Вычисление факториала числа с использованием кэша.
+     *
+     * @param number число, для которого нужно посчитать факториал
      */
-    public static void calculateFact(final int countNum) {
-        generateFile(countNum);
-        List<Integer> list = readNumbersFromFile(PATH_NUMBERS);
+    private static long calculateFactorial(int number) {
+        if (!factorialCache.containsKey(number)) { // Если результат еще не закеширован
+            long factorialResult = 1L; // Инициализируем результат как 1
 
-        System.out.print("Найти факториалы чисел: ");
-        System.out.println(list);
+            for (int i = 2; i <= number; i++) { // Вычисляем факториал циклом
+                factorialResult *= i;
 
-        for (Integer number : list) { // Используем foreach для большей ясности
-            Thread thread = new Thread(new FactorialThread(number));
-            thread.start();
+                if (factorialResult > Integer.MAX_VALUE || factorialResult < Integer.MIN_VALUE) {
+                    throw new ArithmeticException("Переполнение при вычислении факториала");
+                }
+            }
+
+            factorialCache.put(number, factorialResult); // Закешируем результат после его расчета
+
+//          Если хотим ограничить размер кэша и удалять старые значения:
+//          if(factorialCache.size() > MAX_CACHE_SIZE){
+//              Iterator<Map.Entry<Integer, Long>> iterator=cache.entrySet().iterator();
+//              iterator.next(); iterator.remove();
+//          }
+//
+//           понадобится переменная MAX_CACHE_SIZE и импорт Iterator и Map.Entry.
+
         }
+
+        return factorialCache.get(number); // Возвращаем закешированный или только что посчитанный результат
+
     }
 
-    public static void main(String[] args) {
+    /**
+     * Потоковый класс для расчета и вывода факториала числа с учетом кэша.
+     */
+    private static class FactorialThread extends Thread {
+
+        private final int number;
+
+        public FactorialThread(int number){
+            this.number=number;}
+
+        @Override public void run(){
+            long fact=calculateFactorial(this.number);
+            System.out.printf("Факториал %d равен %d%n", this.number,fact);}
+
+    }
+
+    public static void main(String[] args){
         calculateFact(50);
+
+    }
+
+    public static void calculateFact(final int countNum){
+
+        generateFile(countNum);
+
+        List<Integer> list=readNumbersFromFile(PATH_NUMBERS);
+
+        System.out.print("Найти факториалы чисел:");
+        System.out.println(list);
+
+        for(Integer number:list){
+            Thread thread=new Thread(new FactorialThread(number));
+            thread.start();}
     }
 }
